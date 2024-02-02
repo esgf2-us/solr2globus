@@ -65,6 +65,15 @@ def ingest(client, entries):
         raise GlobusError()
 
 
+def amend_doc(doc):
+    """Amend the document.
+
+    If if wish to make changes to the information obtained from the Solr index, change
+    it in this routine. In our case, we want to simply replicate the document exactly.
+    """
+    return doc
+
+
 def ingest_by_search(client, chunk_size=1000, **search):
     """Ingest the records found in the given search, `chunk_size` at a time."""
     ingest_time = time.time()
@@ -77,6 +86,7 @@ def ingest_by_search(client, chunk_size=1000, **search):
         )
         entries = []
         for doc in data["response"]["docs"]:
+            doc = amend_doc(doc)
             gmeta_entry = {
                 "id": search["type"].lower() if "type" in search else "dataset",
                 "subject": doc["id"],
