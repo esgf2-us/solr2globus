@@ -70,6 +70,7 @@ def amend_doc(doc):
 
     If if wish to make changes to the information obtained from the Solr index, change
     it in this routine. In our case, we want to simply replicate the document exactly.
+    Look for where it is called and make sure you uncomment it.
     """
     return doc
 
