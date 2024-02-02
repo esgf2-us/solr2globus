@@ -86,7 +86,7 @@ def ingest_by_search(client, chunk_size=1000, **search):
         )
         entries = []
         for doc in data["response"]["docs"]:
-            doc = amend_doc(doc)
+            # doc = amend_doc(doc)
             gmeta_entry = {
                 "id": search["type"].lower() if "type" in search else "dataset",
                 "subject": doc["id"],
