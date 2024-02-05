@@ -127,7 +127,7 @@ def iter_chunks():
 def ingest_chunk(args):
     chunk, client = args
     chunk_with_progress = tqdm(
-        chunk, desc="Updating chunk...", unit="doc", miniters=1000, colour=True
+        chunk, desc="Updating chunk...", unit="doc", miniters=1000
     )
     response = client.ingest(
         GLOBUS_INDEX_ID,
