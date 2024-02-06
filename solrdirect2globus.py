@@ -134,9 +134,9 @@ def ingest_chunk(args):
         {
             "ingest_type": "GMetaList",
             "ingest_data": {
-                "GMetaList": [
+                "gmeta": [
                     {
-                        "id": "files",
+                        "id": "file",
                         "subject": solr_doc["id"],
                         "visible_to": ["public"],
                         "content": solr_doc,
