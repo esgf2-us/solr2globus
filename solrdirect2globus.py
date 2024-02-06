@@ -125,10 +125,8 @@ def iter_chunks():
 
 
 def ingest_chunk(args):
+    print("ingest_chunk")
     chunk, client = args
-    chunk_with_progress = tqdm(
-        chunk, desc="Updating chunk...", unit="doc", miniters=1000
-    )
     response = client.ingest(
         GLOBUS_INDEX_ID,
         {
@@ -141,11 +139,12 @@ def ingest_chunk(args):
                         "visible_to": ["public"],
                         "content": solr_doc,
                     }
-                    for solr_doc in chunk_with_progress
+                    for solr_doc in chunk
                 ],
             },
         },
     )
+    print(response)
     if not (response.data["acknowledged"] and response.data["success"]):
         print(response.data)
         raise ValueError
