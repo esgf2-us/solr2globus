@@ -134,7 +134,7 @@ def ingest_chunk(args):
         {
             "ingest_type": "GMetaList",
             "ingest_data": {
-                "GMeTaList": [
+                "GMetaList": [
                     {
                         "id": "files",
                         "subject": solr_doc["id"],
@@ -146,7 +146,9 @@ def ingest_chunk(args):
             },
         },
     )
-
+    if not (response.data["acknowledged"] and response.data["success"]):
+        print(response.data)
+        raise ValueError
     tqdm.write("Submitting chunk...")
     return response.data
 
