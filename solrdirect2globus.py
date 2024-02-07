@@ -16,7 +16,7 @@ from pysolr import Solr
 from tqdm import tqdm
 
 SOLR_URL = "http://esgf-data-node-solr-write:8983/solr/"
-CHUNK_SIZE = 20000
+CHUNK_SIZE = 1500
 SEARCH_QUERY = "*"
 GLOBUS_INDEX_ID = "ea4595f4-7b71-4da7-a1f0-e3f5d8f7f062"
 
@@ -125,7 +125,6 @@ def iter_chunks():
 
 
 def ingest_chunk(args):
-    print("ingest_chunk")
     chunk, client = args
     response = client.ingest(
         GLOBUS_INDEX_ID,
@@ -144,9 +143,8 @@ def ingest_chunk(args):
             },
         },
     )
-    print(response)
     if not (response.data["acknowledged"] and response.data["success"]):
-        print(response.data)
+        tqdm.write(response.data)
         raise ValueError
     tqdm.write("Submitting chunk...")
     return response.data
