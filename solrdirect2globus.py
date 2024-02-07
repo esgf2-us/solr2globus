@@ -1,14 +1,21 @@
+"""A script for ingesting Solr records into Globus.
+
+Warning: In order to progressively yield records in the map pool, exceptions that are
+thrown in the `ingest_chunk()` routine are eaten. I recommend using the globus_sdk to
+query the task list by index_id using `SearchClient().get_task_list()`. If you aren't
+seeing tasks populated, something is wrong.
+
+"""
+
 import math
 import queue
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, _base
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin
 
-import backoff
 from globus_sdk import (
     AccessTokenAuthorizer,
-    GlobusError,
     NativeAppAuthClient,
     SearchClient,
 )
@@ -16,7 +23,7 @@ from pysolr import Solr
 from tqdm import tqdm
 
 SOLR_URL = "http://esgf-data-node-solr-write:8983/solr/"
-CHUNK_SIZE = 1500
+CHUNK_SIZE = 1500  # Globus rejected submissions much larger
 SEARCH_QUERY = "*"
 GLOBUS_INDEX_ID = "ea4595f4-7b71-4da7-a1f0-e3f5d8f7f062"
 
@@ -146,7 +153,6 @@ def ingest_chunk(args):
     if not (response.data["acknowledged"] and response.data["success"]):
         tqdm.write(response.data)
         raise ValueError
-    tqdm.write("Submitting chunk...")
     return response.data
 
 
@@ -155,5 +161,4 @@ with ThreadPoolExecutor() as pool:
     for result in pool.map(
         ingest_chunk, ((chunk, elastic_client) for chunk in iter_chunks())
     ):
-        tqdm.write(f"Submitted chunk: {result}")
         del result
