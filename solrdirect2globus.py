@@ -1,9 +1,11 @@
 """A script for ingesting Solr records into Globus.
 
 Warning: In order to progressively yield records in the map pool, exceptions that are
-thrown in the `ingest_chunk()` routine are eaten. I recommend using the globus_sdk to
-query the task list by index_id using `SearchClient().get_task_list()`. If you aren't
-seeing tasks populated, something is wrong.
+thrown in the `ingest_chunk()` routine are eaten. I recommend using the globus cli:
+
+globus search task list GLOBUS_INDEX_ID
+
+If you aren't seeing tasks populated, something is wrong.
 
 """
 
@@ -18,6 +20,7 @@ from globus_sdk import (
     AccessTokenAuthorizer,
     NativeAppAuthClient,
     SearchClient,
+    SearchQuery,
 )
 from pysolr import Solr
 from tqdm import tqdm
@@ -26,6 +29,7 @@ SOLR_URL = "http://esgf-data-node-solr-write:8983/solr/"
 CHUNK_SIZE = 1500  # Globus rejected submissions much larger
 SEARCH_QUERY = "*"
 GLOBUS_INDEX_ID = "ea4595f4-7b71-4da7-a1f0-e3f5d8f7f062"
+CHECK = True  # Check if the ids already exist
 
 
 def _result_or_cancel(fut, timeout=None):
@@ -133,6 +137,19 @@ def iter_chunks():
 
 def ingest_chunk(args):
     chunk, client = args
+    # If all the ids are ingested, just skip. This will just keep Globus' ingest queue
+    # from getting plugged up with things that we have already done.
+    if CHECK:
+        ids = [doc["ids"] for doc in chunk]
+        response = client.post_search(
+            GLOBUS_INDEX_ID,
+            SearchQuery("")
+            .add_filter("type", ["File"])
+            .add_filter("id", ids, type="match_any"),
+            limit=CHUNK_SIZE,
+        )
+        if response.http_status == 200 and response["count"] == len(ids):
+            return None
     response = client.ingest(
         GLOBUS_INDEX_ID,
         {
