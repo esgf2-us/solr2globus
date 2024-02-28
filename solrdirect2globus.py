@@ -143,14 +143,14 @@ def ingest_chunk(args):
     if CHECK:
         ids = [doc["id"] for doc in chunk]
         tqdm.write(f"found ids {len(ids)}")
-        response = client.post_search(
+        response = SearchClient().post_search(
             GLOBUS_INDEX_ID,
             SearchQuery("")
             .add_filter("type", ["File"])
             .add_filter("id", ids, type="match_any"),
             limit=CHUNK_SIZE,
         )
-        tqdm.write("globus response")
+        tqdm.write(f"globus response {response.http_status}")
         if response.http_status == 200 and response["count"] == len(ids):
             tqdm.write("ids exist already, skipping")
             return response.data
