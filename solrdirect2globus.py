@@ -184,4 +184,5 @@ with ThreadPoolExecutor() as pool:
     for result in pool.map(
         ingest_chunk, ((chunk, elastic_client) for chunk in iter_chunks())
     ):
+        result.result()
         del result
