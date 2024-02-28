@@ -142,7 +142,7 @@ def ingest_chunk(args):
     tqdm.write("ingest_begin")
     if CHECK:
         ids = [doc["id"] for doc in chunk]
-        tqdm.write("found ids")
+        tqdm.write(f"found ids {len(ids)}")
         response = client.post_search(
             GLOBUS_INDEX_ID,
             SearchQuery("")
