@@ -139,8 +139,10 @@ def ingest_chunk(args):
     chunk, client = args
     # If all the ids are ingested, just skip. This will just keep Globus' ingest queue
     # from getting plugged up with things that we have already done.
+    tqdm.write("ingest_begin")
     if CHECK:
-        ids = [doc["ids"] for doc in chunk]
+        ids = [doc["id"] for doc in chunk]
+        tqdm.write("found ids")
         response = client.post_search(
             GLOBUS_INDEX_ID,
             SearchQuery("")
@@ -148,8 +150,11 @@ def ingest_chunk(args):
             .add_filter("id", ids, type="match_any"),
             limit=CHUNK_SIZE,
         )
+        tqdm.write("globus response")
         if response.http_status == 200 and response["count"] == len(ids):
-            return None
+            tqdm.write("ids exist already, skipping")
+            return response.data
+    tqdm.write("ids do not exist, ingesting")
     response = client.ingest(
         GLOBUS_INDEX_ID,
         {
@@ -168,8 +173,9 @@ def ingest_chunk(args):
         },
     )
     if not (response.data["acknowledged"] and response.data["success"]):
-        tqdm.write(response.data)
+        tqdm.write("failed to ingest")
         raise ValueError
+    tqdm.write("ingest successful")
     return response.data
 
 
