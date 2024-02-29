@@ -36,7 +36,7 @@ logging.basicConfig(
     filename="ingest.log",
     format="%(asctime)s %(message)s",
     encoding="utf-8",
-    level=logging.DEBUG,
+    level=logging.CRITICAL,
 )
 
 
@@ -182,10 +182,10 @@ def ingest_chunk(args):
     )
     if not (response.data["acknowledged"] and response.data["success"]):
         tqdm.write("failed to ingest")
-        logging.debug(f"FAIL {response.data['task_id']}")
+        logging.critical(f"FAIL {response.data['task_id']}")
         raise ValueError
     tqdm.write("ingest successful")
-    logging.debug(f"ACCEPT {response.data['task_id']}")
+    logging.critical(f"ACCEPT {response.data['task_id']}")
     return response.data
 
 
