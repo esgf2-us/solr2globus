@@ -9,6 +9,7 @@ If you aren't seeing tasks populated, something is wrong.
 
 """
 
+import logging
 import math
 import queue
 import threading
@@ -26,10 +27,17 @@ from pysolr import Solr
 from tqdm import tqdm
 
 SOLR_URL = "http://esgf-data-node-solr-write:8983/solr/"
-CHUNK_SIZE = 1500  # Globus rejected submissions much larger
+CHUNK_SIZE = 1000  # Globus rejected submissions much larger
 SEARCH_QUERY = "*"
 GLOBUS_INDEX_ID = "ea4595f4-7b71-4da7-a1f0-e3f5d8f7f062"
 CHECK = True  # Check if the ids already exist
+
+logging.basicConfig(
+    filename="ingest.log",
+    format="%(asctime)s %(message)s",
+    encoding="utf-8",
+    level=logging.INFO,
+)
 
 
 def _result_or_cancel(fut, timeout=None):
@@ -174,8 +182,10 @@ def ingest_chunk(args):
     )
     if not (response.data["acknowledged"] and response.data["success"]):
         tqdm.write("failed to ingest")
+        logging.info(f"FAIL {response.data["task_id"]}")
         raise ValueError
     tqdm.write("ingest successful")
+    logging.info(f"ACCEPT {response.data["task_id"]}")
     return response.data
 
 
@@ -184,5 +194,5 @@ with ThreadPoolExecutor() as pool:
     for result in pool.map(
         ingest_chunk, ((chunk, elastic_client) for chunk in iter_chunks())
     ):
-        result.result()
+        result.keys()  # just do something with the output
         del result
