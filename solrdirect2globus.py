@@ -182,10 +182,10 @@ def ingest_chunk(args):
     )
     if not (response.data["acknowledged"] and response.data["success"]):
         tqdm.write("failed to ingest")
-        logging.info(f"FAIL {response.data["task_id"]}")
+        logging.info(f"FAIL {response.data['task_id']}")
         raise ValueError
     tqdm.write("ingest successful")
-    logging.info(f"ACCEPT {response.data["task_id"]}")
+    logging.info(f"ACCEPT {response.data['task_id']}")
     return response.data
 
 
