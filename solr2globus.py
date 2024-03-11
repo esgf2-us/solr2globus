@@ -1,45 +1,54 @@
 import datetime
 import logging
 import time
+from pathlib import Path
 
 import backoff
+import globus_sdk as sdk
 import requests
-from globus_sdk import (
-    AccessTokenAuthorizer,
-    GlobusError,
-    NativeAppAuthClient,
-    SearchAPIError,
-    SearchClient,
-)
+from globus_sdk.tokenstorage import SimpleJSONFileAdapter
 from tqdm import tqdm
 
 
-def get_authorization():
-    """Get an authorizer that will allow the ingest.
-
-    You will need to be the owner/admin of the globus index into which you wish to
-    ingest. The client uuid I have hard-coded in here is one I registered under the
-    ESGF2 project for solr2globus. As far as I know, this just gives Globus a
-    responsible application when looking in logs.
-    """
-    client = NativeAppAuthClient("cb4f0bba-e44c-4a36-9023-06929dbb4742")
-    client.oauth2_start_flow(
-        requested_scopes=["urn:globus:auth:scope:search.api.globus.org:all"],
-        refresh_tokens=False,
-    )
-    authorize_url = client.oauth2_get_authorize_url()
-    print(
-        f"""
-All interactions with Globus must be authorized. Go here:
+def get_authorized_search_client() -> sdk.SearchClient:
+    """Return a transfer client authorized to make transfers."""
+    config_path = Path.home() / ".config" / "solr2globus"
+    config_path.mkdir(parents=True, exist_ok=True)
+    token_adapter = SimpleJSONFileAdapter(config_path / "tokens.json")
+    client = sdk.NativeAppAuthClient("cb4f0bba-e44c-4a36-9023-06929dbb4742")
+    if token_adapter.file_exists():
+        tokens = token_adapter.get_token_data("search.api.globus.org")
+    else:
+        client.oauth2_start_flow(
+            requested_scopes=["urn:globus:auth:scope:search.api.globus.org:all"],
+            refresh_tokens=True,
+        )
+        authorize_url = client.oauth2_get_authorize_url()
+        print(
+            f"""
+All interactions with Globus must be authorized. To ensure that we have permission to faci
+liate your transfer, please open the following link in your browser.
 
 {authorize_url}
 
-and paste the link here:\n"""
+You will have to login (or be logged in) to your Globus account. Globus will also request 
+that you give a label for this authorization. You may pick anything of your choosing. Afte
+r following the instructions in your browser, Globus will generate a code which you must c
+opy and paste here and then hit <enter>.\n"""
+        )
+        auth_code = input("> ").strip()
+        token_response = client.oauth2_exchange_code_for_tokens(auth_code)
+        token_adapter.store(token_response)
+        tokens = token_response.by_resource_server["search.api.globus.org"]
+    authorizer = sdk.RefreshTokenAuthorizer(
+        tokens["refresh_token"],
+        client,
+        access_token=tokens["access_token"],
+        expires_at=tokens["expires_at_seconds"],
+        on_refresh=token_adapter.on_refresh,
     )
-    auth_code = input("> ").strip()
-    token_response = client.oauth2_exchange_code_for_tokens(auth_code)
-    auth = AccessTokenAuthorizer(token_response["access_token"])
-    return auth
+    client = sdk.SearchClient(authorizer=authorizer)
+    return client
 
 
 @backoff.on_exception(backoff.expo, requests.exceptions.RequestException)
@@ -52,7 +61,9 @@ def esg_search(base_url, **search):
     return response.json()
 
 
-@backoff.on_exception(backoff.expo, (requests.exceptions.RequestException, GlobusError))
+@backoff.on_exception(
+    backoff.expo, (requests.exceptions.RequestException, sdk.GlobusError)
+)
 def ingest(client, entries):
     response = client.ingest(
         globus_index_id,
@@ -62,8 +73,8 @@ def ingest(client, entries):
         },
     )
     if not (response.data["acknowledged"] and response.data["success"]):
-        logger.info(f"{response.data}")
-        raise GlobusError()
+        logger.error(f"{response.data}")
+        raise sdk.GlobusError()
 
 
 def amend_doc(doc):
@@ -102,7 +113,7 @@ def ingest_by_search(client, chunk_size=1000, **search):
             entries.append(gmeta_entry)
         try:
             ingest(client, entries)
-        except SearchAPIError as exception:
+        except sdk.SearchAPIError as exception:
             logger.error(f"Failed to ingest {chunk_size=} {search=} {exception=}")
 
     ingest_time = time.time() - ingest_time
@@ -126,7 +137,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     # Authorize our client
-    client = SearchClient(authorizer=get_authorization())
+    client = get_authorized_search_client()
 
     # Ingests will take place on a per-experiment basis
     response = esg_search(
