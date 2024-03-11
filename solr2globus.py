@@ -8,6 +8,7 @@ from globus_sdk import (
     AccessTokenAuthorizer,
     GlobusError,
     NativeAppAuthClient,
+    SearchAPIError,
     SearchClient,
 )
 from tqdm import tqdm
@@ -81,7 +82,11 @@ def ingest_by_search(client, chunk_size=1000, **search):
     # To know how many chunks to submits, we need to know how many results
     num_results = esg_search(solr_base_url, limit=0, **search)["response"]["numFound"]
     num_chunks = int(num_results / chunk_size) + 1
-    for i in tqdm(range(num_chunks), unit="chunk"):
+    for i in tqdm(
+        range(num_chunks),
+        unit="chunk",
+        desc=".".join([val for facet, val in search.items() if facet != "type"]),
+    ):
         data = esg_search(
             solr_base_url, offset=i * chunk_size, limit=chunk_size, **search
         )
@@ -95,7 +100,11 @@ def ingest_by_search(client, chunk_size=1000, **search):
                 "content": doc,
             }
             entries.append(gmeta_entry)
-        ingest(client, entries)
+        try:
+            ingest(client, entries)
+        except SearchAPIError as exception:
+            logger.error(f"Failed to ingest {chunk_size=} {search=} {exception=}")
+
     ingest_time = time.time() - ingest_time
     logger.info(
         f"ingested {num_results} records in {ingest_time:.2f} [s] at {num_results/ingest_time:.2f} record/s"
@@ -106,27 +115,43 @@ if __name__ == "__main__":
     # Configure the source Solr index by URL and the target Globus index by UUID
     solr_base_url = "http://esgf-node.ornl.gov"
     globus_index_id = "ea4595f4-7b71-4da7-a1f0-e3f5d8f7f062"
+    project = "e3sm"
 
     # Setup some logging, you will see Globus' logs too
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s: %(message)s",
+        format="[%(levelname)s]%(asctime)s: %(message)s",
         filename="ingest.log",
     )
     logger = logging.getLogger(__name__)
 
-    # Create a client authorized to ingest and then ingest by a search. Files and
-    # Datasets must be ingested separately as esg-search does not query both types
-    # simultaneously.
+    # Authorize our client
     client = SearchClient(authorizer=get_authorization())
-    ingest_time = time.time()
-    for entry_type in ["Dataset", "File"]:
+
+    # Ingests will take place on a per-experiment basis
+    response = esg_search(
+        "http://esgf-node.ornl.gov",
+        type="File",
+        limit=0,
+        project=project,
+        experiment=[
+            # "hist-aer",
+            "hist-nat",
+            "amip",
+            "hist-GHG",
+            "piControl",
+            "historical",
+        ],
+        facets="experiment",
+    )
+    experiments = response["facet_counts"]["facet_fields"]["experiment"][::2]
+    counts = response["facet_counts"]["facet_fields"]["experiment"][1::2]
+    experiments = [e for _, e in sorted(zip(counts, experiments))]
+
+    for experiment in experiments:
+        ingest_time = time.time()
         ingest_by_search(
-            client,
-            experiment_id="historical",
-            source_id="CESM2",
-            variant_label="r1i1p1f1",
-            type=entry_type,
+            client, type="File", chunk_size=100, project=project, experiment=experiment
         )
-    ingest_time = time.time() - ingest_time
-    logger.info(f"ingest total time {str(datetime.timedelta(seconds=ingest_time))}")
+        ingest_time = time.time() - ingest_time
+        logger.info(f"ingest total time {str(datetime.timedelta(seconds=ingest_time))}")
